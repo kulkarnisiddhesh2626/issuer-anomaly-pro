@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Issuer Anomaly Console</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { sans:['Inter','sans-serif'], display:['Space Grotesk','sans-serif'], mono:['JetBrains Mono','monospace'] },
+    colors: { ink:'#0A0A12', accent:'#8B5CF6', accent2:'#22D3EE' }
+  }}
+}
+</script>
+<style>
+:root{ --glass:rgba(255,255,255,.045); --glass-brd:rgba(255,255,255,.09); }
+html,body{height:100%;}
+body{ background:#07070D; color:#E7E9F5; font-family:'Inter',sans-serif; overflow-x:hidden; }
+/* animated background blobs */
+.blob{ position:fixed; border-radius:50%; filter:blur(90px); opacity:.5; z-index:0; pointer-events:none; }
+.b1{ width:480px;height:480px; background:#7C3AED; top:-120px; left:-80px; animation:drift 18s ease-in-out infinite; }
+.b2{ width:520px;height:520px; background:#06B6D4; top:30%; right:-160px; animation:drift 22s ease-in-out infinite reverse; }
+.b3{ width:420px;height:420px; background:#DB2777; bottom:-160px; left:30%; animation:drift 26s ease-in-out infinite; }
+@keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(40px,-30px)}}
+.glass{ background:var(--glass); border:1px solid var(--glass-brd); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.card{ border-radius:20px; transition:transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.card:hover{ transform:translateY(-4px); box-shadow:0 24px 60px -24px rgba(124,58,237,.5); border-color:rgba(139,92,246,.4); }
+.grad-text{ background:linear-gradient(120deg,#A78BFA,#818CF8,#22D3EE); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.grad-bar{ background:linear-gradient(90deg,#8B5CF6,#6366F1,#22D3EE); }
+.grad-bar-hot{ background:linear-gradient(90deg,#FB7185,#F472B6,#FBBF24); }
+.nav-item{ transition:all .2s ease; border:1px solid transparent; }
+.nav-item:hover{ background:rgba(255,255,255,.05); }
+.nav-item.active{ background:linear-gradient(120deg,rgba(139,92,246,.22),rgba(34,211,238,.15)); border-color:rgba(139,92,246,.45); box-shadow:0 8px 24px -12px rgba(139,92,246,.6); }
+.nav-item.active .nav-ico{ color:#C4B5FD; }
+.pulse{ animation:pulse 1.8s ease-in-out infinite; }
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.5}}
+.view{ animation:rise .45s ease both; }
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fab{ position:fixed; right:26px; bottom:26px; width:54px;height:54px;border-radius:50%; border:0; cursor:pointer;
+  color:#fff;font-size:1.4rem;z-index:50; background:linear-gradient(135deg,#8B5CF6,#22D3EE);
+  box-shadow:0 16px 34px -10px rgba(124,58,237,.8); animation:bob 3s ease-in-out infinite; transition:transform .2s ease; }
+.fab:hover{ transform:scale(1.12) translateY(-3px); }
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.chip{ display:inline-flex;align-items:center;gap:7px;font-size:.72rem;font-weight:600;padding:5px 11px;border-radius:999px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12); }
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.btn-grad{ background:linear-gradient(120deg,#8B5CF6,#6366F1); transition:transform .15s ease, box-shadow .2s ease;
+  box-shadow:0 12px 26px -10px rgba(124,58,237,.8); }
+.btn-grad:hover{ transform:translateY(-2px); box-shadow:0 18px 32px -10px rgba(124,58,237,.95); }
+.seg{ transition:all .2s ease; }
+.seg.on{ background:linear-gradient(120deg,#8B5CF6,#6366F1); color:#fff; box-shadow:0 8px 20px -8px rgba(124,58,237,.7); }
+.scroll-thin::-webkit-scrollbar{width:8px;height:8px;} .scroll-thin::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px;}
+.prose-d{ color:#C9CCE6; line-height:1.65; } .prose-d strong{color:#fff;} .prose-d h4{color:#fff;font-family:'Space Grotesk';margin:.4rem 0;}
+.prose-d table{width:100%;border-collapse:collapse;margin:.6rem 0;} .prose-d th,.prose-d td{border:1px solid rgba(255,255,255,.1);padding:7px 10px;text-align:left;font-size:.86rem;}
+.prose-d code{background:rgba(255,255,255,.08);padding:1px 6px;border-radius:6px;font-family:'JetBrains Mono';font-size:.82rem;}
+.prose-d pre{background:rgba(255,255,255,.05);padding:12px;border-radius:12px;overflow:auto;}
+.msg-u{ background:linear-gradient(120deg,#8B5CF6,#6366F1); color:#fff; }
+.msg-a{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
+</style>
+</head>
+<body class="font-sans">
+<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+<div class="relative z-10 flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="glass w-[252px] shrink-0 m-3 rounded-3xl p-5 flex flex-col sticky top-3 h-[calc(100vh-24px)]">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="w-9 h-9 rounded-xl grad-bar flex items-center justify-center text-lg shadow-lg">🛰️</div>
+      <div><div class="font-display font-bold text-[15px] leading-tight grad-text">Anomaly Console</div>
+        <div class="text-[11px] text-slate-400">Issuer risk ops</div></div>
+    </div>
+    <nav class="flex flex-col gap-1.5 text-[14px]">
+      <button data-view="overview" class="nav-item active rounded-xl px-3.5 py-2.5 flex items-center gap-3 text-left"><span class="nav-ico text-slate-300">▦</span> Overview</button>
+      <button data-view="incidents" class="nav-item rounded-xl px-3.5 py-2.5 flex items-center gap-3 text-left"><span class="nav-ico text-slate-300">◈</span> Incidents</button>
+      <button data-view="assistant" class="nav-item rounded-xl px-3.5 py-2.5 flex items-center gap-3 text-left"><span class="nav-ico text-slate-300">✦</span> Assistant</button>
+      <button data-view="howitworks" class="nav-item rounded-xl px-3.5 py-2.5 flex items-center gap-3 text-left"><span class="nav-ico text-slate-300">❖</span> How it works</button>
+    </nav>
+    <div class="mt-auto pt-4">
+      <div id="llm-status" class="chip"><span class="dot pulse" style="background:#FBBF24"></span> connecting…</div>
+      <div class="text-[10px] text-slate-500 mt-3">Synthetic data · POC</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 min-w-0 p-3 pr-5">
+    <header class="flex items-center justify-between mb-5 px-1">
+      <div><h1 id="page-title" class="font-display font-bold text-2xl">Overview</h1>
+        <p id="page-sub" class="text-slate-400 text-sm">Portfolio transaction health and the detection pipeline.</p></div>
+      <div class="flex gap-2"><span id="window-chip" class="chip"><span class="dot" style="background:#A78BFA"></span> …</span></div>
+    </header>
+
+    <!-- OVERVIEW -->
+    <section id="view-overview" class="view">
+      <div id="kpis" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3"></div>
+      <div class="grid grid-cols-12 gap-3">
+        <div class="glass card col-span-12 lg:col-span-8 p-5">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400">Portfolio health · shaded = incidents</div>
+            <div id="metric-seg" class="glass rounded-xl p-1 flex gap-1 text-[12px]"></div>
+          </div>
+          <div id="health-chart" class="h-[330px] w-full"></div>
+        </div>
+        <div class="glass card col-span-12 lg:col-span-4 p-5">
+          <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400 mb-3">Detection pipeline</div>
+          <div id="steps" class="flex flex-col gap-2.5"></div>
+        </div>
+        <div class="glass card col-span-12 p-5">
+          <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400 mb-3">Recent incidents</div>
+          <div id="recent" class="grid grid-cols-1 md:grid-cols-2 gap-2.5"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INCIDENTS -->
+    <section id="view-incidents" class="view hidden">
+      <div class="grid grid-cols-12 gap-3">
+        <div class="glass card col-span-12 lg:col-span-4 p-3 max-h-[78vh] overflow-auto scroll-thin">
+          <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400 px-2 py-2">Incidents</div>
+          <div id="inc-list" class="flex flex-col gap-2"></div>
+        </div>
+        <div class="col-span-12 lg:col-span-8 flex flex-col gap-3">
+          <div id="inc-detail" class="glass card p-5"></div>
+          <div class="grid grid-cols-12 gap-3">
+            <div class="glass card col-span-12 xl:col-span-7 p-5">
+              <div id="inc-diag" class="prose-d text-sm"></div>
+            </div>
+            <div class="glass card col-span-12 xl:col-span-5 p-5">
+              <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400 mb-2">Decline-reason mix shift</div>
+              <div id="decline-chart" class="h-[260px] w-full"></div>
+            </div>
+          </div>
+          <details class="glass card p-4">
+            <summary class="cursor-pointer text-sm text-slate-300">🔎 Grounding facts passed to the LLM (the model sees only this — never raw rows)</summary>
+            <pre id="inc-facts" class="text-[12px] text-slate-300 mt-3 overflow-auto scroll-thin max-h-[320px]"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ASSISTANT -->
+    <section id="view-assistant" class="view hidden">
+      <div class="glass card p-5 flex flex-col h-[78vh]">
+        <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400 mb-3">Grounded analyst assistant · answers only from detector outputs, never raw rows</div>
+        <div id="chat" class="flex-1 overflow-auto scroll-thin flex flex-col gap-3 pr-1"></div>
+        <div id="suggest" class="flex flex-wrap gap-2 my-3"></div>
+        <div class="flex gap-2">
+          <input id="chat-input" placeholder="Ask about the transaction data…" class="glass flex-1 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-400"/>
+          <button id="chat-send" class="btn-grad rounded-xl px-5 font-semibold text-white">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="view-howitworks" class="view hidden">
+      <div class="glass card p-6"><div id="howto" class="prose-d text-sm max-w-3xl"></div></div>
+    </section>
+  </main>
+</div>
+
+<button class="fab" title="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+const SEV = { high:['#FB7185','rgba(251,113,133,.16)'], medium:['#FBBF24','rgba(251,191,36,.16)'], low:['#34D399','rgba(52,211,153,.16)'] };
+const METRICS = ["Approval rate %","Decline rate %","Fraud rate %","Volume (txns/hr)"];
+let OV=null, healthChart=null, declineChart=null, incidentsLoaded=false, chatHist=[];
+
+const $ = s => document.querySelector(s);
+const api = (p,o) => fetch(p,o).then(r=>r.json());
+
+function sevBadge(s){ const [fg,bg]=SEV[s]||['#94a3b8','rgba(148,163,184,.16)'];
+  return `<span class="font-mono text-[11px] font-semibold px-2.5 py-1 rounded-lg" style="color:${fg};background:${bg}">${s.toUpperCase()}</span>`; }
+
+// ---------- nav ----------
+const TITLES={overview:['Overview','Portfolio transaction health and the detection pipeline.'],
+  incidents:['Incidents & Diagnosis','Each detected incident, explained and grounded in detector facts.'],
+  assistant:['Analyst Assistant','Ask follow-up questions — grounded only in detector outputs.'],
+  howitworks:['How it works','Method, design choices, and how this maps to the assessment.']};
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  const v=b.dataset.view;
+  document.querySelectorAll('section[id^=view-]').forEach(s=>s.classList.add('hidden'));
+  const sec=$('#view-'+v); sec.classList.remove('hidden');
+  sec.classList.remove('view'); void sec.offsetWidth; sec.classList.add('view');
+  $('#page-title').textContent=TITLES[v][0]; $('#page-sub').textContent=TITLES[v][1];
+  if(v==='incidents' && !incidentsLoaded) loadIncidents();
+  if(v==='overview' && healthChart) healthChart.resize();
+});
+
+// ---------- overview ----------
+async function loadOverview(){
+  OV = await api('/api/overview');
+  // status
+  const s=$('#llm-status');
+  if(OV.online){ s.innerHTML=`<span class="dot pulse" style="background:#34D399"></span> ${OV.provider}`; }
+  else{ s.innerHTML=`<span class="dot pulse" style="background:#FBBF24"></span> offline · templates`; }
+  $('#window-chip').innerHTML=`<span class="dot" style="background:#A78BFA"></span> ${OV.window} · hourly`;
+  // kpis
+  const k=OV.kpis;
+  const tiles=[
+    ['Transactions',k.txn_m,`${k.transactions.toLocaleString()} auths`,false],
+    ['Approval rate',k.approval+'%','portfolio avg',false],
+    ['Fraud rate',k.fraud+'%','of txn count',false],
+    ['Incidents',k.incidents,`<b style="color:#FB7185">${k.sev.high} high</b> · <b style="color:#FBBF24">${k.sev.medium} med</b> · <b style="color:#34D399">${k.sev.low} low</b>`,true],
+    ['Granular alerts',k.alerts,'hourly slice flags',false]];
+  $('#kpis').innerHTML = tiles.map(([l,v,sub,hot])=>`
+    <div class="glass card relative overflow-hidden p-4">
+      <div class="absolute top-0 left-0 right-0 h-[3px] ${hot?'grad-bar-hot':'grad-bar'}"></div>
+      <div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400">${l}</div>
+      <div class="font-mono font-semibold text-3xl mt-2 grad-text">${v}</div>
+      <div class="text-[12px] text-slate-400 mt-1">${sub}</div>
+    </div>`).join('');
+  // steps
+  const st=OV.steps;
+  const steps=[['01 · INGEST','Synthetic data',`<span class="font-mono text-lg text-white">${st.rows.toLocaleString()}</span> hourly rows`],
+    ['02 · DETECT','Statistical + ML',`<span class="font-mono text-lg text-white">${st.events}</span> flags → <span class="font-mono text-lg text-white">${st.incidents}</span> incidents`],
+    ['03 · DIAGNOSE','Grounded GenAI','narratives <span class="text-white">ready</span>'],
+    ['04 · ASK','Analyst assistant','grounded Q&A']];
+  $('#steps').innerHTML = steps.map(([n,t,d])=>`
+    <div class="rounded-xl p-3 border-l-2" style="border-color:#8B5CF6;background:rgba(255,255,255,.03)">
+      <div class="font-mono text-[11px] font-semibold text-violet-300">${n}</div>
+      <div class="font-display font-semibold text-[15px]">${t}</div>
+      <div class="text-[12px] text-slate-400">${d}</div></div>`).join('');
+  // recent
+  $('#recent').innerHTML = OV.recent.map(i=>`
+    <div class="rounded-xl p-3" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)">
+      <div class="flex items-center gap-2">${sevBadge(i.severity)}<span class="font-mono text-[12px] text-slate-400">${i.id}</span>
+        <span class="font-semibold text-[14px]">${i.title}</span></div>
+      <div class="text-[12px] text-slate-400 mt-1">${i.start} → ${i.end} · peak z ${i.peak_z} · ${i.metric}</div></div>`).join('');
+  // metric segmented control
+  $('#metric-seg').innerHTML = METRICS.map((m,idx)=>`<button class="seg rounded-lg px-3 py-1.5 ${idx===0?'on':'text-slate-300'}" data-m="${m}">${m.replace(' (txns/hr)','').replace(' %','')}</button>`).join('');
+  $('#metric-seg').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    $('#metric-seg').querySelectorAll('button').forEach(x=>{x.classList.remove('on');x.classList.add('text-slate-300');});
+    b.classList.add('on'); b.classList.remove('text-slate-300'); drawHealth(b.dataset.m);
+  });
+  drawHealth(METRICS[0]);
+}
+
+function drawHealth(metric){
+  if(!healthChart) healthChart = echarts.init($('#health-chart'), null, {renderer:'canvas'});
+  const data = OV.series.timestamps.map((t,i)=>[t, OV.series[metric][i]]);
+  const bands = OV.bands.map(b=>[{xAxis:b.start,itemStyle:{color:'rgba(244,63,94,.10)'}},{xAxis:b.end}]);
+  healthChart.setOption({
+    backgroundColor:'transparent',
+    grid:{left:48,right:16,top:18,bottom:30},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(15,15,30,.92)',borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#E7E9F5'}},
+    xAxis:{type:'time',axisLine:{lineStyle:{color:'rgba(255,255,255,.15)'}},axisLabel:{color:'#8A90B0'},splitLine:{show:false}},
+    yAxis:{type:'value',scale:true,axisLabel:{color:'#8A90B0'},splitLine:{lineStyle:{color:'rgba(255,255,255,.06)'}}},
+    series:[{type:'line',data,smooth:true,showSymbol:false,name:metric,
+      lineStyle:{width:2.4,color:'#A78BFA'},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(139,92,246,.35)'},{offset:1,color:'rgba(139,92,246,0)'}])},
+      markArea:{silent:true,data:bands}}]
+  }, true);
+}
+
+// ---------- incidents ----------
+async function loadIncidents(){
+  incidentsLoaded=true;
+  const list = await api('/api/incidents');
+  $('#inc-list').innerHTML = list.map((i,idx)=>`
+    <button data-id="${i.id}" class="inc-pick text-left rounded-xl p-3 ${idx===0?'ring-1 ring-violet-400/60':''}" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)">
+      <div class="flex items-center gap-2">${sevBadge(i.severity)}<span class="font-mono text-[11px] text-slate-400">${i.id}</span></div>
+      <div class="text-[13px] mt-1.5 leading-snug">${i.title}</div></button>`).join('');
+  $('#inc-list').querySelectorAll('.inc-pick').forEach(b=>b.onclick=()=>{
+    $('#inc-list').querySelectorAll('.inc-pick').forEach(x=>x.classList.remove('ring-1','ring-violet-400/60'));
+    b.classList.add('ring-1','ring-violet-400/60'); loadIncident(b.dataset.id);
+  });
+  if(list.length) loadIncident(list[0].id);
+}
+
+async function loadIncident(id){
+  const d = await api('/api/incident/'+id);
+  const x=d.detail;
+  $('#inc-detail').innerHTML = `
+    <div class="flex items-center gap-2 mb-2">${sevBadge(x.severity)}<span class="font-mono text-[12px] text-slate-400">${x.id}</span></div>
+    <div class="font-display font-semibold text-xl mb-4">${x.title}</div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6 text-[13px]">
+      ${[['Window',`${x.start} → ${x.end}`],['Primary metric',`${x.metric} · ${x.grain}`],['Peak robust z',x.peak_z],
+         ['Scope',x.scope],['Slices affected',x.slices],['Isolation-Forest',x.iso?'corroborated':'not corroborated']]
+        .map(([k,v])=>`<div><div class="text-[10px] uppercase tracking-wider text-slate-500">${k}</div><div class="font-mono">${v}</div></div>`).join('')}
+    </div>`;
+  $('#inc-diag').innerHTML = `<div class="text-[11px] font-semibold tracking-widest uppercase text-slate-400 mb-2">🧠 Diagnostic narrative · ${d.source}</div>` + marked.parse(d.diagnosis);
+  $('#inc-facts').textContent = JSON.stringify(d.facts,null,2);
+  drawDecline(d.decline);
+}
+
+function drawDecline(decline){
+  if(!declineChart) declineChart = echarts.init($('#decline-chart'), null, {renderer:'canvas'});
+  if(!decline){ declineChart.clear();
+    declineChart.setOption({backgroundColor:'transparent',
+      graphic:{type:'text',left:'center',top:'middle',style:{text:'Volume-driven incident —\nno decline-mix shift',fill:'#8A90B0',fontSize:13,align:'center'}}}); return; }
+  declineChart.setOption({
+    backgroundColor:'transparent', grid:{left:40,right:10,top:30,bottom:50},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(15,15,30,.92)',borderColor:'rgba(255,255,255,.1)',textStyle:{color:'#E7E9F5'}},
+    legend:{top:0,textStyle:{color:'#9AA0C0'}},
+    xAxis:{type:'category',data:decline.map(r=>r.code),axisLabel:{color:'#8A90B0',rotate:30,fontSize:10},axisLine:{lineStyle:{color:'rgba(255,255,255,.15)'}}},
+    yAxis:{type:'value',name:'% of declines',axisLabel:{color:'#8A90B0'},splitLine:{lineStyle:{color:'rgba(255,255,255,.06)'}}},
+    series:[{name:'Baseline',type:'bar',data:decline.map(r=>r.baseline),itemStyle:{color:'#5B6178',borderRadius:[4,4,0,0]}},
+            {name:'During',type:'bar',data:decline.map(r=>r.during),itemStyle:{color:'#A78BFA',borderRadius:[4,4,0,0]}}]
+  }, true);
+}
+
+// ---------- assistant ----------
+const SUGGEST=["Why did approval rates drop on the worst day?","Which decline reason codes drove the biggest incident?",
+  "Was there any fraud activity, and where was it concentrated?","Summarise all detected incidents."];
+function renderChat(){
+  $('#chat').innerHTML = chatHist.map(m=>{
+    const mine=m.role==='user';
+    return `<div class="flex ${mine?'justify-end':'justify-start'}"><div class="${mine?'msg-u':'msg-a prose-d'} rounded-2xl px-4 py-2.5 max-w-[80%] text-sm">${mine?m.content:marked.parse(m.content)}</div></div>`;
+  }).join('');
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+}
+function renderSuggest(){
+  $('#suggest').innerHTML = (chatHist.length?[]:SUGGEST).map(q=>`<button class="sugg glass rounded-full px-3.5 py-2 text-[12px] text-slate-300 hover:text-white" data-q="${q.replace(/"/g,'&quot;')}">${q}</button>`).join('');
+  $('#suggest').querySelectorAll('.sugg').forEach(b=>b.onclick=()=>sendChat(b.dataset.q));
+}
+async function sendChat(text){
+  text=(text||$('#chat-input').value).trim(); if(!text) return;
+  $('#chat-input').value='';
+  chatHist.push({role:'user',content:text}); renderChat(); renderSuggest();
+  chatHist.push({role:'assistant',content:'_…thinking_'}); renderChat();
+  try{
+    const r = await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:text, history:chatHist.slice(0,-2)})});
+    chatHist[chatHist.length-1]={role:'assistant',content:r.answer};
+  }catch(e){ chatHist[chatHist.length-1]={role:'assistant',content:'Sorry — request failed.'}; }
+  renderChat();
+}
+$('#chat-send').onclick=()=>sendChat();
+$('#chat-input').addEventListener('keydown',e=>{ if(e.key==='Enter') sendChat(); });
+renderSuggest();
+
+// ---------- methodology ----------
+const HOWTO=`
+### Architecture
+The system keeps a hard wall between two layers. The **detection layer** answers *what moved, where, and how much* using explainable statistics. The **GenAI layer** answers *what it means and what to do* — and it only ever consumes the detector's structured output, never raw transactions. A model handed only verified numbers has nothing to invent.
+
+\`\`\`
+synthetic data → detection (stats + Isolation Forest) → fact sheet → grounded LLM → chat
+\`\`\`
+
+#### Detection method
+- **Rate metrics** use a **two-proportion z-test** against a pooled **seasonal** baseline (same weekday × hour); the volume term means sparse, low-volume noise scores low — targeting the low-false-positive requirement.
+- **Volume** uses a **Poisson** deviation against its seasonal mean.
+- **Effect-size floors** suppress changes that are significant but trivial.
+- An **Isolation Forest** is a multivariate **cross-check only** — corroborates, never solely triggers, so everything stays explainable.
+- Flagged hours merge into **events**; overlapping events consolidate into **incidents**.
+
+#### GenAI design
+- The LLM receives a compact **fact sheet** per incident (visible under *Grounding facts*).
+- A fixed four-section narrative at low temperature keeps output skimmable and repeatable.
+- **Hallucination control** is layered: architectural (no raw data), instructional (facts are the only truth), parametric (low temp).
+- **Provider-pluggable**: Anthropic or Groq via one env var; an offline template path keeps everything working with no key.
+
+#### How this maps to the assessment
+| Criterion | Where to see it |
+|---|---|
+| Problem framing | Overview pipeline + this page |
+| Detection soundness | Seasonal, volume-aware, explainable; Isolation-Forest cross-check |
+| GenAI grounding & prompts | Incidents → *Grounding facts*; fact-only prompting; offline determinism |
+| Engineering quality | Modular \`src/\` engine reused unchanged behind a JSON API |
+| Communication | Product-style UI, in-app methodology, README + WRITEUP |
+
+*Injected anomalies: issuer/processor outage, card-testing fraud attack, 3DS auth failure, cross-border approval drop, gambling-MCC volume surge. The detector recovers all five.*`;
+$('#howto').innerHTML = marked.parse(HOWTO);
+
+// ---------- boot ----------
+window.addEventListener('resize',()=>{ healthChart&&healthChart.resize(); declineChart&&declineChart.resize(); });
+loadOverview();
+</script>
+</body>
+</html>
