@@ -70,8 +70,9 @@ def diagnose_incident(df: pd.DataFrame, inc: Incident,
         try:
             narrative = llm_client.complete(
                 DIAGNOSIS_SYSTEM, [{"role": "user", "content": user}], model=model)
-        except Exception:
+        except Exception as e:
             # Any LLM error (bad key, rate limit, retired model) -> safe fallback.
+            print(f"[LLM fallback · diagnose] {type(e).__name__}: {e}", flush=True)
             narrative = _offline_diagnosis(facts)
     else:
         narrative = _offline_diagnosis(facts)
@@ -167,8 +168,9 @@ def answer_question(df: pd.DataFrame, incidents: list[Incident],
                 + [{"role": "user", "content": question}])
     try:
         return llm_client.complete(CHAT_SYSTEM, messages, model=model)
-    except Exception:
+    except Exception as e:
         # Any LLM error -> fall back to the grounded deterministic answer.
+        print(f"[LLM fallback · chat] {type(e).__name__}: {e}", flush=True)
         return _offline_answer(question, context, incidents)
 
 

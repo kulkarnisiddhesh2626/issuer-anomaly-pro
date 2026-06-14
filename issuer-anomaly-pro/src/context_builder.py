@@ -179,11 +179,23 @@ def decline_reason_daily(df: pd.DataFrame) -> list[dict]:
 
 def build_chat_context(df: pd.DataFrame, incidents: list[Incident],
                        max_incidents: int = 12) -> dict:
-    """Everything the conversational layer is allowed to reason over."""
-    inc_facts = [incident_context(df, inc) for inc in incidents[:max_incidents]]
+    """Compact context the conversational layer reasons over.
+
+    Kept deliberately small (well under free-tier token-per-minute limits): the
+    full per-incident fact sheets and the daily decline-reason table are large,
+    so for chat we send a trimmed incident view plus the dataset overview and the
+    daily metric table. The Incidents tab still shows each incident's complete
+    fact sheet separately (it calls incident_context directly).
+    """
+    keep = ("incident_id", "title", "severity", "window", "scope", "scope_label",
+            "primary_signal", "metrics_window", "code_glossary")
+    slim = []
+    for f in (incident_context(df, inc) for inc in incidents[:max_incidents]):
+        s = {k: f[k] for k in keep if k in f}
+        s["decline_reason_shift"] = f.get("decline_reason_shift", [])[:5]
+        slim.append(s)
     return {
         "dataset_overview": dataset_overview(df),
-        "detected_incidents": inc_facts,
+        "detected_incidents": slim,
         "daily_metrics_overall": daily_metric_table(df),
-        "daily_decline_reason_counts": decline_reason_daily(df),
     }
