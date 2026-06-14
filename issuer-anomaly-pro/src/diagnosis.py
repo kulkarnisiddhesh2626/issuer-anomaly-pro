@@ -176,6 +176,62 @@ def _offline_answer(question: str, context: dict, incidents: list[Incident]) -> 
     """Keyword-routed deterministic answers so chat works without a key."""
     q = question.lower()
     incs = context["detected_incidents"]
+    ov = context.get("dataset_overview", {})
+
+    def _one(i):
+        s = i["primary_signal"]
+        drv = (i["decline_reason_shift"][0]["decline_reason_code"]
+               if i.get("decline_reason_shift") else None)
+        line = (f"{i['incident_id']} [{i['severity']}] {i['title']} — {s['metric']} "
+                f"{s['direction']} to {s['observed']} vs ~{s['expected_baseline']} "
+                f"expected (z={s['robust_z_score']})")
+        return line + (f"; top driver {drv}." if drv else ".")
+
+    # greeting / help
+    if q.strip() in ("hi", "hello", "hey", "yo", "hi there", "hello there") \
+            or "what can you" in q or q.strip() in ("help", "?"):
+        return ("Hi — I'm the analyst assistant for this issuer portfolio. I can summarise "
+                f"the {len(incs)} detected incident(s), explain which decline-reason codes "
+                "drove an incident, cover fraud activity, or tell you what happened on a given "
+                "day. Try: \u201cwhat are the main concerns?\u201d, \u201cwhich codes drove "
+                "the biggest incident?\u201d, or \u201cwhy did approvals drop on the worst "
+                "day?\u201d")
+
+    # main concerns / risks
+    if any(k in q for k in ("concern", "risk", "important", "notable", "worry",
+                            "critical", "attention", "priorit")):
+        flagged = [i for i in incs if i["severity"] in ("high", "medium")] or incs
+        return "The main concerns right now:\n" + "\n".join("- " + _one(i) for i in flagged[:5])
+
+    # fraud
+    if "fraud" in q:
+        fr = [i for i in incs if "fraud" in (i["primary_signal"]["metric"] + i["title"]).lower()]
+        if fr:
+            return "Fraud-related activity detected:\n" + "\n".join("- " + _one(i) for i in fr)
+        return (f"No incident was driven primarily by fraud; the overall fraud rate is "
+                f"{ov.get('overall_fraud_rate_pct', '?')}% of transactions.")
+
+    # approval / decline focus
+    if "approv" in q or "declin" in q:
+        rel = [i for i in incs if any(w in i["primary_signal"]["metric"].lower()
+                                      for w in ("approval", "decline"))]
+        if rel and "reason" not in q and "code" not in q:
+            return "Approval / decline incidents:\n" + "\n".join("- " + _one(i) for i in rel[:5])
+
+    # worst / biggest / most severe
+    if any(w in q for w in ("worst", "biggest", "largest", "most severe", "severe")) and incs:
+        t = max(incs, key=lambda i: i["primary_signal"]["robust_z_score"])
+        return "Most severe incident: " + _one(t)
+
+    # overall health / status
+    if any(w in q for w in ("overview", "overall", "status", "health", "how is", "portfolio")):
+        tx = ov.get("total_transactions")
+        txs = f"{tx:,}" if isinstance(tx, int) else "?"
+        dr = ov.get("date_range", {})
+        return (f"Across {str(dr.get('start',''))[:10]} → {str(dr.get('end',''))[:10]}: "
+                f"{txs} transactions, {ov.get('overall_approval_rate_pct','?')}% approved, "
+                f"{ov.get('overall_fraud_rate_pct','?')}% fraud. "
+                f"{len(incs)} incident(s) detected.")
 
     if any(k in q for k in ("how many", "list", "what anomal", "incidents", "summary")):
         out = [f"Detected {len(incs)} incident(s):"]
@@ -213,6 +269,15 @@ def _offline_answer(question: str, context: dict, incidents: list[Incident]) -> 
                         f"(z={s['robust_z_score']}). Top driver: "
                         f"{(i['decline_reason_shift'][0]['decline_reason_code'] if i['decline_reason_shift'] else 'n/a')}.")
 
-    return ("Offline mode answers a limited set of questions (incident list, "
-            "decline-reason drivers, date lookups). Set ANTHROPIC_API_KEY for "
-            "full conversational Q&A grounded in the same data context.")
+    # default — still useful and grounded, never a dead end
+    if incs:
+        top = sorted(incs, key=lambda i: i["primary_signal"]["robust_z_score"],
+                     reverse=True)[:3]
+        body = "\n".join("- " + _one(i) for i in top)
+        return ("Here's what stands out from the detector outputs:\n" + body
+                + f"\n\n{len(incs)} incident(s) in total. You can ask about a specific "
+                "incident, its decline-reason drivers, fraud activity, or what happened on "
+                "a particular day.")
+    return ("No anomalies were detected in the current data. You can ask about the overall "
+            "approval, decline, or fraud rates, or regenerate the data to explore other "
+            "scenarios.")
