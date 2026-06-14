@@ -67,8 +67,12 @@ def diagnose_incident(df: pd.DataFrame, inc: Incident,
     if llm_client.is_online():
         user = ("Diagnose this anomaly. Facts (JSON):\n\n"
                 + json.dumps(facts, indent=2, default=str))
-        narrative = llm_client.complete(
-            DIAGNOSIS_SYSTEM, [{"role": "user", "content": user}], model=model)
+        try:
+            narrative = llm_client.complete(
+                DIAGNOSIS_SYSTEM, [{"role": "user", "content": user}], model=model)
+        except Exception:
+            # Any LLM error (bad key, rate limit, retired model) -> safe fallback.
+            narrative = _offline_diagnosis(facts)
     else:
         narrative = _offline_diagnosis(facts)
     return narrative, facts
@@ -161,7 +165,11 @@ def answer_question(df: pd.DataFrame, incidents: list[Incident],
                   "content": "Understood. I'll answer only from this context."}]
                 + history
                 + [{"role": "user", "content": question}])
-    return llm_client.complete(CHAT_SYSTEM, messages, model=model)
+    try:
+        return llm_client.complete(CHAT_SYSTEM, messages, model=model)
+    except Exception:
+        # Any LLM error -> fall back to the grounded deterministic answer.
+        return _offline_answer(question, context, incidents)
 
 
 def _offline_answer(question: str, context: dict, incidents: list[Incident]) -> str:
